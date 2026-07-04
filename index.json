@@ -7,7 +7,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 
 // Masukkan URL Web App Google Apps Script (doPost) Anda di sini nanti
-const GOOGLE_WEBHOOK_URL = "URL_WEB_APP_GOOGLE_APPS_SCRIPT_ANDA"; 
+const GOOGLE_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxuDbpfFn_IUa7ByNuv7VdllXyrb2YhOqnq51OF4IIY_GNJZUIIgmn6xSsIoeH5C5iE/exec"; 
 
 // Inisialisasi WhatsApp Client dengan argumen khusus untuk server Docker/Render
 const client = new Client({
