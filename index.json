@@ -1,0 +1,84 @@
+const express = require('express');
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+
+const app = express();
+app.use(express.json());
+const PORT = process.env.PORT || 3000;
+
+// Masukkan URL Web App Google Apps Script (doPost) Anda di sini nanti
+const GOOGLE_WEBHOOK_URL = "URL_WEB_APP_GOOGLE_APPS_SCRIPT_ANDA"; 
+
+// Inisialisasi WhatsApp Client dengan argumen khusus untuk server Docker/Render
+const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
+});
+
+// Menampilkan QR Code di LOG Render untuk di-scan
+client.on('qr', (qr) => {
+    console.log('=== SCAN QR CODE DI BAWAH INI MENGGUNAKAN WHATSAPP ANDA ===');
+    qrcode.generate(qr, { small: true });
+});
+
+client.on('ready', () => {
+    console.log('✅ Bot WhatsApp Berhasil Terhubung dan Siap!');
+});
+
+// MENERIMA PESAN MASUK DARI WHATSAPP -> KIRIM KE GOOGLE APPS SCRIPT
+client.on('message', async (msg) => {
+    // Abaikan jika pesan berasal dari grup atau status
+    if (msg.from.includes('@g.us') || msg.from.includes('@status')) return;
+
+    console.log(`Pesan masuk dari ${msg.from}: ${msg.body}`);
+
+    // Bungkus data mirip dengan format payload Meta agar doPost Anda tidak banyak berubah
+    const payload = {
+        entry: [{
+            changes: [{
+                value: {
+                    messages: [{
+                        from: msg.from.replace('@c.us', ''), // Ambil nomor HP saja
+                        type: 'text',
+                        text: { body: msg.body }
+                    }]
+                }
+            }]
+        }]
+    };
+
+    // Teruskan ke Google Apps Script (doPost)
+    try {
+        const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+        await fetch(GOOGLE_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        console.log('-> Berhasil meneruskan ke Google Sheets Webhook.');
+    } catch (err) {
+        console.error('X Gagal meneruskan ke Webhook:', err.message);
+    }
+});
+
+// API ENDPOINT UNTUK MENGIRIM PESAN BALIK DARI GOOGLE APPS SCRIPT
+app.post('/send', async (req, res) => {
+    const { to, message } = req.body;
+    const formattedTo = `${to}@c.us`;
+
+    try {
+        await client.sendMessage(formattedTo, message);
+        res.status(200).json({ status: 'success', message: 'Pesan terkirim' });
+    } catch (err) {
+        res.status(500).json({ status: 'failed', error: err.message });
+    }
+});
+
+app.get('/', (req, res) => { res.send('Server WA Gateway Aktif!'); });
+
+app.listen(PORT, () => {
+    console.log(`Server berjalan di port ${PORT}`);
+    client.initialize();
+});
